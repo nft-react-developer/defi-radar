@@ -59,7 +59,12 @@ export const alerts = mysqlTable(
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     poolId: varchar("pool_id", { length: 255 }).notNull(),
-    condition: mysqlEnum("condition_type", ["ABOVE", "BELOW"]).notNull(),
+    condition: mysqlEnum("condition_type", [
+      "APY_ABOVE",
+      "APY_BELOW",
+      "TVL_DROP",
+      "DELTA_SPIKE",
+    ]).notNull(),
     threshold: decimal("threshold", { precision: 10, scale: 4 }).notNull(),
     active: boolean("active").default(true),
     lastTriggered: timestamp("last_triggered"),
