@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Pool {
+  id              String   @id @default(uuid())
+  poolId          String   @unique @db.VarChar(255)  // IDs de DeFiLlama pueden ser largos
+  chain           String   @db.VarChar(100)
+  project         String   @db.VarChar(100)
+  symbol          String   @db.VarChar(100)
+  tvlUsd          Decimal  @db.Decimal(24, 2)  // Precisión para dinero (hasta trillones con 2 decimales)
+  apyBase         Decimal? @db.Decimal(10, 4)  // 4 decimales para APY (ej: 12.3456%)
+  apyReward       Decimal? @db.Decimal(10, 4)
+  apy             Decimal  @db.Decimal(10, 4)
+  stablecoin      Boolean  @default(true)
+  riskScore       Int?     
+  ilRisk          String?  @db.VarChar(20)     // NONE, LOW, MEDIUM, HIGH
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  snapshots       YieldSnapshot[]
+  
+  @@index([stablecoin])
+  @@index([chain])
+  @@index([apy])
+  @@index([tvlUsd])  // Importante para queries "top TVL"
+  @@map("pools")     // Nombre de tabla en plural explícito
+}
+
+model YieldSnapshot {
+  id        String   @id @default(uuid())
+  poolId    String   @db.VarChar(255)
+  pool      Pool     @relation(fields: [poolId], references: [poolId], onDelete: Cascade)
+  apy       Decimal  @db.Decimal(10, 4)
+  tvlUsd    Decimal  @db.Decimal(24, 2)
+  timestamp DateTime @default(now())
+  
+  @@index([timestamp])
+  @@index([poolId])
+  @@index([timestamp, poolId])  // Compound index para queries de historial eficientes
+  @@map("yield_snapshots")
+}
+
+model Alert {
+  id            String   @id @default(uuid())
+  poolId        String   @db.VarChar(255)
+  condition     String   @db.VarChar(10)   // ABOVE, BELOW
+  threshold     Decimal  @db.Decimal(10, 4)
+  active        Boolean  @default(true)
+  lastTriggered DateTime?
+  createdAt     DateTime @default(now())
+  
+  @@index([active])
+  @@map("alerts")
+}
