@@ -1,6 +1,7 @@
 import { app } from "./presentation/http/server";
 import { YieldSyncWorker } from "./infrastructure/workers/YieldSyncWorker";
 import { closeDB, testConnection } from "./db";
+import { TelegramService } from "./infrastructure/notifications/TelegramService";
 
 const API_PORT = process.env.API_PORT || 3000;
 
@@ -31,6 +32,13 @@ async function bootstrap() {
     console.log(`   - GET http://localhost:${API_PORT}/api/alerts`);
     console.log(`   - GET http://localhost:${API_PORT}/api/chains`);
   });
+
+  const telegram = new TelegramService();
+  telegram.startCommandPolling(10000);
+
+  console.log(
+    "🤖 Bot de comandos iniciado (usá /status, /ping o /health en Telegram)",
+  );
 }
 
 // Graceful shutdown
