@@ -1,3 +1,6 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import { app } from "./presentation/http/server";
 import { YieldSyncWorker } from "./infrastructure/workers/YieldSyncWorker";
 import { closeDB, testConnection } from "./db";
