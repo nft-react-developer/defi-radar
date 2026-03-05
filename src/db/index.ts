@@ -22,6 +22,7 @@ const pool = mysql.createPool({
   // timeout: 60000,             // Timeout general
 });
 
+console.log("host", process.env.DB_HOST || "192.168.1.133");
 export const db = drizzle(pool, { schema, mode: "default" });
 
 // Helper para cerrar graceful
