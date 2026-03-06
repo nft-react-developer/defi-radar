@@ -1,15 +1,15 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import * as schema from "./schema";
-import dotenv from "dotenv";
-
-dotenv.config();
 
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || "192.168.1.133",
-  user: process.env.DB_USER || "dev",
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME || "yieldradar",
+  host: process.env.DATABASE_HOST_NAME || "192.168.1.133",
+  user: process.env.DATABASE_USER_NAME || "dev",
+  password: process.env.DATABASE_USER_PASSWORD,
+  database: process.env.DATABASE_DB_NAME || "yieldradar",
   port: Number(process.env.DB_PORT) || 3306,
   waitForConnections: true,
   connectionLimit: 5,
@@ -34,7 +34,8 @@ export async function testConnection() {
   try {
     await pool.execute("SELECT 1");
     return true;
-  } catch {
+  } catch (error) {
+    console.error("❌ Error al probar conexión:", error);
     return false;
   }
 }
