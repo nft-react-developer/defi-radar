@@ -3,6 +3,7 @@ import { pools, yieldSnapshots, alerts } from "../../db/schema";
 import { eq, and, gte, desc, sql } from "drizzle-orm";
 import { TelegramService } from "../../infrastructure/notifications/TelegramService";
 import { randomUUID } from "crypto";
+import { ScoredPool } from "./YieldScorer";
 
 // Configuración desde variables de entorno o defaults
 const CONFIG = {
@@ -19,7 +20,7 @@ export class AlertEngine {
   /**
    * Método principal: analiza todos los pools y decide si alertar
    */
-  async analyzePools(currentPools: any[]) {
+  async analyzePools(currentPools: ScoredPool[]) {
     console.log(`🔔 Analizando ${currentPools.length} pools...`);
 
     const stats = { opportunities: 0, risks: 0, skipped: 0 };
@@ -29,7 +30,7 @@ export class AlertEngine {
         // 1. Validar calidad básica (evitar falsos positivos)
         const quality = await this.validateQuality(pool);
         if (!quality.isValid && quality.severity !== "CRITICAL") {
-          console.log(`⏭️  Pool ${pool.poolId} descartado: ${quality.reason}`);
+          console.log(`⏭️  Pool ${pool.pool} descartado: ${quality.reason}`);
           stats.skipped++;
           continue;
         }
@@ -38,7 +39,7 @@ export class AlertEngine {
         const risk = await this.detectRisk(pool);
         if (risk.isRisk) {
           const shouldSend = await this.shouldAlert(
-            pool.poolId,
+            pool.pool,
             "TVL_DROP", // Usamos TVL_DROP del enum
             risk.severity,
             pool.apy, // Para comparar si cambió mucho
@@ -58,7 +59,7 @@ export class AlertEngine {
 
           if (isOpportunity) {
             const shouldSend = await this.shouldAlert(
-              pool.poolId,
+              pool.pool,
               "APY_ABOVE", // Usamos APY_ABOVE del enum
               "HIGH",
               pool.apy,
@@ -71,7 +72,7 @@ export class AlertEngine {
           }
         }
       } catch (error) {
-        console.error(`❌ Error analizando pool ${pool.poolId}:`, error);
+        console.error(`❌ Error analizando pool ${pool.pool}:`, error);
       }
     }
 
