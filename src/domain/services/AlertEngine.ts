@@ -8,7 +8,7 @@ import { ScoredPool } from "./YieldScorer";
 // Configuración desde variables de entorno o defaults
 const CONFIG = {
   COOLDOWN_HOURS: Number(process.env.ALERT_COOLDOWN_HOURS) || 4,
-  MIN_TVL_FOR_OPPORTUNITY: Number(process.env.MIN_TVL_FOR_ALERT) || 1_000_000, // $1M
+  MIN_TVL_FOR_OPPORTUNITY: Number(process.env.MIN_TVL_FOR_ALERT) || 20_000_000, // $20M
   TVL_DROP_THRESHOLD: Number(process.env.TVL_DROP_THRESHOLD) || 0.2, // 20%
   SIGNIFICANT_CHANGE_THRESHOLD: 0.5, // Si cambia 50% más, ignorar cooldown
   MIN_POOL_AGE_DAYS: 3, // Pools con menos de 3 días son sospechosos
@@ -295,7 +295,7 @@ export class AlertEngine {
   /**
    * Envía alerta de oportunidad
    */
-  private async sendOpportunityAlert(pool: any, quality: any) {
+  private async sendOpportunityAlert(pool: ScoredPool, quality: any) {
     const message = `🚀 <b>OPORTUNIDAD DETECTADA</b> (Score: ${quality.score}/100)
     
 <b>${pool.project}</b> - ${pool.symbol}
@@ -308,13 +308,13 @@ ${pool.url ? `<a href="${pool.url}">🔗 Ir al Protocolo</a>` : ""}
 
 <i>Alerta filtrada por calidad • StableRadar</i>`;
 
-    await this.sendAlert(pool.poolId, "APY_ABOVE", pool.apy, message);
+    await this.sendAlert(pool.pool, "APY_ABOVE", pool.apy, message);
   }
 
   /**
    * Envía alerta de riesgo
    */
-  private async sendRiskAlert(pool: any, risk: any) {
+  private async sendRiskAlert(pool: ScoredPool, risk: any) {
     const emoji = risk.severity === "CRITICAL" ? "🚨" : "⚠️";
 
     const message = `${emoji} <b>ALERTA DE RIESGO - ${risk.severity}</b>
@@ -329,7 +329,7 @@ Verificar antes de interactuar.</i>
 
 ${pool.url ? `<a href="${pool.url}">Ver en explorador</a>` : ""}`;
 
-    await this.sendAlert(pool.poolId, "TVL_DROP", pool.apy, message, true);
+    await this.sendAlert(pool.pool, "TVL_DROP", pool.apy, message, true);
   }
 
   /**
