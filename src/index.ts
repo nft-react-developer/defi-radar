@@ -36,7 +36,7 @@ async function bootstrap() {
     console.log(`   - GET http://localhost:${API_PORT}/api/chains`);
     console.log(`   - ALERT_MIN_APY: ${process.env.ALERT_MIN_APY}`);
     console.log(`   - ALERT_MAX_RISK: ${process.env.ALERT_MAX_RISK}`);
-    );
+  });
 
   const telegram = new TelegramService();
   telegram.startCommandPolling(10000);
