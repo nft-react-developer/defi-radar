@@ -55,7 +55,7 @@ export class YieldSyncWorker {
       await this.saveSnapshots(scored);
 
       console.log("🔔 Evaluando alertas...");
-      await this.alertEngine.checkAllAlerts(scored);
+      await this.alertEngine.analyzePools(scored);
 
       console.log(
         `✅ Sync completado: ${scored.length} pools en ${Date.now() - start}ms`,
