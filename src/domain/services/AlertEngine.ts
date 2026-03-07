@@ -132,7 +132,7 @@ export class AlertEngine {
       .where(
         and(
           eq(alerts.poolId, poolId),
-          eq(alerts.condition, condition), // Cambiado: condition en lugar de conditionType
+          eq(alerts.condition, condition),
           eq(alerts.active, true),
         ),
       )

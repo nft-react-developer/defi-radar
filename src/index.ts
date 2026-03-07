@@ -37,6 +37,9 @@ async function bootstrap() {
     console.log(`   - ALERT_MIN_APY: ${process.env.ALERT_MIN_APY}`);
     console.log(`   - ALERT_MAX_RISK: ${process.env.ALERT_MAX_RISK}`);
     console.log(`   - MIN_TVL_FOR_ALERT: ${process.env.MIN_TVL_FOR_ALERT}`);
+    console.log(
+      `   - ALERT_COOLDOWN_HOURS: ${process.env.ALERT_COOLDOWN_HOURS}`,
+    );
   });
 
   const telegram = new TelegramService();
