@@ -153,14 +153,15 @@ export class YieldSyncWorker {
   }
 
   private async cleanupOldData() {
-    const ninetyDaysAgo = new Date();
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    const daysToCleanup = new Date();
+    const DAYS_THRESHOLD = Number(process.env.DAYS_THRESHOLD || 365);
+    daysToCleanup.setDate(daysToCleanup.getDate() - DAYS_THRESHOLD);
 
     // Drizzle no tiene delete con where date < X fácil, usamos SQL raw
     await db.execute(
-      sql`DELETE FROM yield_snapshots WHERE ts < ${ninetyDaysAgo}`,
+      sql`DELETE FROM yield_snapshots WHERE ts < ${daysToCleanup}`,
     );
 
-    console.log("🧹 Datos antiguos limpiados (>90 días)");
+    console.log(`🧹 Datos antiguos limpiados (>${DAYS_THRESHOLD} días)`);
   }
 }
