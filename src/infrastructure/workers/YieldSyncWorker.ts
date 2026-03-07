@@ -1,11 +1,6 @@
 import cron from "node-cron";
 import { db } from "../../db";
-import {
-  pools,
-  yieldSnapshots,
-  NewPool,
-  NewYieldSnapshot,
-} from "../../db/schema";
+import { pools, yieldSnapshots, NewYieldSnapshot } from "../../db/schema";
 import { DefiLlamaClient } from "../api/DefiLlamaClient";
 import { StableFilter } from "../../domain/services/StableFilter";
 import { YieldScorer } from "../../domain/services/YieldScorer";
@@ -37,7 +32,6 @@ export class YieldSyncWorker {
       const allPools = await this.llama.getAllPools();
       const stablePools = this.filter.filter(allPools);
       const scored = this.scorer.score(stablePools);
-
       console.log(`📊 Procesando ${scored.length} pools estables...`);
 
       // Procesar uno por uno o en batches muy pequeños para evitar locks
