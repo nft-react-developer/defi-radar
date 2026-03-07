@@ -4,6 +4,11 @@ import { eq, and, gte, desc, sql } from "drizzle-orm";
 import { TelegramService } from "../../infrastructure/notifications/TelegramService";
 import { randomUUID } from "crypto";
 import { ScoredPool } from "./YieldScorer";
+import {
+  AnalyticsEngine,
+  VolatilityMetrics,
+  volatilityTrendDaysEnum,
+} from "./AnalyticsEngine";
 
 // Configuración desde variables de entorno o defaults
 const CONFIG = {
@@ -23,11 +28,13 @@ export class AlertEngine {
   async analyzePools(currentPools: ScoredPool[]) {
     console.log(`🔔 Analizando ${currentPools.length} pools...`);
 
-    const stats = { opportunities: 0, risks: 0, skipped: 0 };
+    // Instanciar analytics
+    const analytics = new AnalyticsEngine();
+    const stats = { opportunities: 0, risks: 0, skipped: 0, volatile: 0 };
 
     for (const pool of currentPools) {
       try {
-        // 1. Validar calidad básica (evitar falsos positivos)
+        // 1. Validar calidad básica
         const quality = await this.validateQuality(pool);
         if (!quality.isValid && quality.severity !== "CRITICAL") {
           console.log(`⏭️  Pool ${pool.pool} descartado: ${quality.reason}`);
@@ -35,40 +42,64 @@ export class AlertEngine {
           continue;
         }
 
-        // 2. Detectar riesgos (TVL cayendo, exploit, etc.)
+        // 2. NUEVO: Calcular volatilidad (máx 30 días)
+        console.log(`📊 Analizando volatilidad de ${pool.pool}...`);
+        const volatility = await analytics.calculateVolatility(
+          pool.pool,
+          volatilityTrendDaysEnum.MEDIUM,
+        );
+
+        // Filtrar pools muy volátiles (CV > 0.6 = montaña rusa)
+        if (volatility.coefficientOfVariation > 0.6) {
+          console.log(
+            `📉 Pool ${pool.pool} muy volátil (CV: ${volatility.coefficientOfVariation}), ignorando`,
+          );
+          stats.volatile++;
+          continue;
+        }
+        console.log(
+          `📈 ${pool.pool}: CV=${volatility.coefficientOfVariation}, 
+            Score=${volatility.reliabilityScore}, 
+            Trend=${volatility.trend}`,
+        );
+
+        // 3. Detectar riesgos (TVL cayendo)
         const risk = await this.detectRisk(pool);
         if (risk.isRisk) {
           const shouldSend = await this.shouldAlert(
             pool.pool,
-            "TVL_DROP", // Usamos TVL_DROP del enum
+            "TVL_DROP",
             risk.severity,
-            pool.apy, // Para comparar si cambió mucho
+            pool.apy,
           );
 
           if (shouldSend) {
-            await this.sendRiskAlert(pool, risk);
+            await this.sendRiskAlert(pool, risk, volatility);
             stats.risks++;
           }
-          continue; // Si hay riesgo grave, no alertar como oportunidad
+          continue;
         }
 
-        // 3. Detectar oportunidades (solo si pasa filtros de calidad)
-        if (quality.score >= 70) {
-          // Score mínimo de calidad
-          const isOpportunity = Number(pool.apy) > 10; // Ejemplo: >10% APY
+        // 4. Detectar oportunidades (ahora con filtro de volatilidad)
+        // Ajustamos: si es estable (CV < 0.3) y APY > 8, ya es bueno
+        // Si es moderado (CV 0.3-0.6), requiere APY más alto (>15)
+        const isStable = volatility.coefficientOfVariation < 0.3;
+        const apyThreshold = isStable ? 8 : 15;
 
-          if (isOpportunity) {
-            const shouldSend = await this.shouldAlert(
-              pool.pool,
-              "APY_ABOVE", // Usamos APY_ABOVE del enum
-              "HIGH",
-              pool.apy,
-            );
+        if (
+          Number(pool.apy) > apyThreshold &&
+          volatility.reliabilityScore > 60
+        ) {
+          const shouldSend = await this.shouldAlert(
+            pool.pool,
+            "APY_ABOVE",
+            isStable ? "HIGH" : "MEDIUM", // Menos urgente si es volátil
+            pool.apy,
+          );
 
-            if (shouldSend) {
-              await this.sendOpportunityAlert(pool, quality);
-              stats.opportunities++;
-            }
+          if (shouldSend) {
+            await this.sendOpportunityAlert(pool, quality, volatility);
+            stats.opportunities++;
           }
         }
       } catch (error) {
@@ -77,7 +108,10 @@ export class AlertEngine {
     }
 
     console.log(
-      `📊 Resumen: ${stats.opportunities} oportunidades, ${stats.risks} riesgos, ${stats.skipped} descartados`,
+      `📊 Resumen: ${stats.opportunities} oportunidades, 
+        ${stats.risks} riesgos, 
+        ${stats.volatile} muy volátiles, 
+        ${stats.skipped} descartados`,
     );
   }
 
@@ -295,39 +329,63 @@ export class AlertEngine {
   /**
    * Envía alerta de oportunidad
    */
-  private async sendOpportunityAlert(pool: ScoredPool, quality: any) {
-    const message = `🚀 <b>OPORTUNIDAD DETECTADA</b> (Score: ${quality.score}/100)
-    
-<b>${pool.project}</b> - ${pool.symbol}
-📊 APY: <b>${Number(pool.apy).toFixed(2)}%</b>
-💰 TVL: $${(Number(pool.tvlUsd) / 1_000_000).toFixed(2)}M
-⛓️ Chain: ${pool.chain}
-🎯 Riesgo: ${pool.riskLevel || "MEDIUM"}
+  private async sendOpportunityAlert(
+    pool: any,
+    quality: any,
+    volatility: VolatilityMetrics,
+  ) {
+    const stabilityEmoji =
+      volatility.coefficientOfVariation < 0.2
+        ? "🟢"
+        : volatility.coefficientOfVariation < 0.4
+          ? "🟡"
+          : "🟠";
 
-${pool.url ? `<a href="${pool.url}">🔗 Ir al Protocolo</a>` : ""}
+    const message = `🚀 <b>OPORTUNIDAD ${stabilityEmoji}. (Score: ${quality.score}/100)</b> 
+  
+    <b>${pool.project}</b> - ${pool.symbol}
+    📊 APY: <b>${Number(pool.apy).toFixed(2)}%</b>
+    📉 Volatilidad: ${volatility.coefficientOfVariation.toFixed(2)} (${volatility.trend})
+    💯 Score: ${volatility.reliabilityScore}/100
+    💰 TVL: $${(Number(pool.tvlUsd) / 1_000_000).toFixed(2)}M
 
-<i>Alerta filtrada por calidad • StableRadar</i>`;
+    ${pool.url ? `<a href="${pool.url}">🔗 Ir al Protocolo</a>` : ""}`;
 
     await this.sendAlert(pool.pool, "APY_ABOVE", pool.apy, message);
   }
-
   /**
    * Envía alerta de riesgo
    */
-  private async sendRiskAlert(pool: ScoredPool, risk: any) {
+  private async sendRiskAlert(
+    pool: any,
+    risk: any,
+    volatility?: VolatilityMetrics,
+  ) {
     const emoji = risk.severity === "CRITICAL" ? "🚨" : "⚠️";
 
+    // Formatear datos de volatilidad si existen
+    let volatilityInfo = "";
+    if (volatility) {
+      const cv = volatility.coefficientOfVariation.toFixed(2);
+      const reliability = volatility.reliabilityScore;
+
+      volatilityInfo = `📉 <b>Perfil antes del incidente:</b>
+        • Volatilidad: ${cv} (${volatility.trend})
+        • Score: ${reliability}/100
+        • Datos: ${volatility.dataPoints} puntos`;
+    }
+
     const message = `${emoji} <b>ALERTA DE RIESGO - ${risk.severity}</b>
-    
-<b>${pool.project}</b> - ${pool.symbol}
-❌ ${risk.reason}
-💰 TVL Actual: $${(Number(pool.tvlUsd) / 1_000_000).toFixed(2)}M
-📉 Cambio 24h: ${(risk.tvlChange24h * 100).toFixed(1)}%
+  
+    <b>${pool.project}</b> - ${pool.symbol}
+    ❌ ${risk.reason}
+    💰 TVL Actual: $${(Number(pool.tvlUsd) / 1_000_000).toFixed(2)}M
+    📉 Cambio 24h: ${(risk.tvlChange24h * 100).toFixed(1)}%${volatilityInfo}
 
-<i>Posible exploit, bug o fuga de capitales.
-Verificar antes de interactuar.</i>
+    <i>⚠️ Posible exploit, bug o fuga de capitales.
+    Verificar antes de interactuar.</i>
 
-${pool.url ? `<a href="${pool.url}">Ver en explorador</a>` : ""}`;
+    ${pool.url ? `<a href="${pool.url}">Ver en explorador</a>` : ""}`;
 
     await this.sendAlert(pool.pool, "TVL_DROP", pool.apy, message, true);
   }
