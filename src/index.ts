@@ -5,7 +5,7 @@ import { app } from "./presentation/http/server";
 import { YieldSyncWorker } from "./infrastructure/workers/YieldSyncWorker";
 import { closeDB, testConnection } from "./db";
 import { TelegramService } from "./infrastructure/notifications/TelegramService";
-
+import { initializeDailyLogger } from "./infrastructure/logging/dailyLogger";
 const API_PORT = process.env.API_PORT || 3000;
 
 async function bootstrap() {
@@ -16,6 +16,8 @@ async function bootstrap() {
     process.exit(1);
   }
   console.log("✅ MariaDB conectado via Drizzle");
+
+  initializeDailyLogger();
 
   // Iniciar Worker
   const worker = new YieldSyncWorker();
