@@ -17,8 +17,6 @@ async function bootstrap() {
   }
   console.log("✅ MariaDB conectado via Drizzle");
 
-  initializeDailyLogger();
-
   // Iniciar Worker
   const worker = new YieldSyncWorker();
   worker.start();
